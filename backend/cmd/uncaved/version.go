@@ -1,0 +1,21 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	"github.com/DoppleDankster/uncaved/internal/version"
+)
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print build version information",
+	Run: func(cmd *cobra.Command, _ []string) {
+		fmt.Fprintln(cmd.OutOrStdout(), version.Info())
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(versionCmd)
+}
