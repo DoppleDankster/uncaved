@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -54,6 +55,26 @@ func Build() error {
 // Clean removes build artifacts.
 func Clean() error {
 	return sh.Rm(binDir)
+}
+
+// Changelog regenerates CHANGELOG.md at the repo root from the git history
+// using git-cliff (config: cliff.toml). git-cliff is a standalone binary, not
+// a go tool — install it from https://git-cliff.org/docs/installation
+// (e.g. `cargo install git-cliff`). The changelog is repo-wide, so this runs
+// against the repository root regardless of mage's working directory.
+func Changelog() error {
+	if _, err := exec.LookPath("git-cliff"); err != nil {
+		return fmt.Errorf("git-cliff not found on PATH; install it: https://git-cliff.org/docs/installation")
+	}
+	root, err := sh.Output("git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return fmt.Errorf("locate repo root: %w", err)
+	}
+	return sh.RunV("git-cliff",
+		"--repository", root,
+		"--config", filepath.Join(root, "cliff.toml"),
+		"--output", filepath.Join(root, "CHANGELOG.md"),
+	)
 }
 
 // flag renders a single -X linker assignment: -X pkg.Name=value.
