@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"os"
@@ -6,18 +6,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const defaultConfigPath = "/etc/uncaved/config.toml"
+
 var rootCmd = &cobra.Command{
-	Use:   "uncaved",
-	Short: "uncave go backend",
+	Use:          "uncaved",
+	Short:        "uncave go backend",
+	SilenceUsage: true,
 }
 
 func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
 func init() {
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().String("config", defaultConfigPath, "path to TOML config file")
 }
