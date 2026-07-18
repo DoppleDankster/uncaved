@@ -1,0 +1,33 @@
+# uncaved backend configuration template.
+#
+# Copy to config.toml for local use, or mount as a Kubernetes ConfigMap at the
+# default path /etc/uncaved/config.toml. The file is optional: when absent the
+# process boots on built-in defaults plus environment overrides.
+#
+# Precedence, lowest to highest:  defaults  <  this file  <  environment.
+# Any key is overridable via UNCAVED_<SECTION>_<KEY>, uppercased with '-' -> '_':
+#   UNCAVED_SERVER_PORT=9090
+#   UNCAVED_INSTRUMENTATION_LOG_LEVEL=debug
+
+[server]
+# HTTP listen port. Default: 8080.
+port = 8080
+
+[instrumentation]
+# Service identity stamped on all telemetry (OTel resource attributes).
+service-name = "uncaved"
+# Build version, usually injected at build/deploy time. Empty is allowed.
+service-version = ""
+# development | production. In development logs are human-readable text;
+# otherwise JSON. Default: development.
+environment = "development"
+# OTLP/HTTP collector base endpoint (scheme + host). Empty disables all
+# telemetry export — logs still go to stdout. Example: http://localhost:4318
+otlp-endpoint = ""
+# Log level: debug | info | warn | error, or "off" to disable logging.
+# Default: info.
+log-level = "info"
+# Head sampling ratio in [0,1]. 1.0 = every trace, 0.0 = none. Default: 1.0.
+trace-sampling = 1.0
+# Metric export interval as a Go duration string. Default: 60s.
+metric-interval = "60s"
