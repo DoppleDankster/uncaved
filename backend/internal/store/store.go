@@ -13,6 +13,24 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
+func (s *Store) DB() DBTX { return s.pool }
+
+// WithTx runs a function as a stransaction
+func (s *Store) WithTx(ctx context.Context, fn func(DBTX) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("store: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store: commit tx: %w", err)
+	}
+	return nil
+}
+
 func Open(ctx context.Context, cfg Config) (*Store, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.dsn())
 	if err != nil {
