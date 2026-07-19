@@ -10,30 +10,33 @@ import (
 	"github.com/DoppleDankster/uncaved/internal/config"
 	"github.com/DoppleDankster/uncaved/internal/instrumentation"
 	"github.com/DoppleDankster/uncaved/internal/server"
+	"github.com/DoppleDankster/uncaved/internal/store"
 )
 
-var serveCmd = &cobra.Command{
-	Use:   "serve",
-	Short: "Run the API server",
-	RunE:  runServe,
+func serveCmd(a *app) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "serve",
+		Short:             "Run the API server",
+		PersistentPreRunE: loadConfigPreRunE(a),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// The flag overrides config/env, but only when explicitly passed —
+			// otherwise its zero value would stomp a config-driven default.
+			if cmd.Flags().Changed("auto-migrate") {
+				v, err := cmd.Flags().GetBool("auto-migrate")
+				if err != nil {
+					return err
+				}
+				a.cfg.DB.AutoMigrate = v
+			}
+			return runServe(a.cfg)
+		},
+	}
+	cmd.Flags().Bool("auto-migrate", true, "apply pending DB migrations at startup")
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(serveCmd)
-}
-
-// runServe wires config, instrumentation and the server.
-func runServe(cmd *cobra.Command, _ []string) error {
-	path, err := cmd.Flags().GetString("config")
-	if err != nil {
-		return err
-	}
-
-	cfg, err := config.Load(path)
-	if err != nil {
-		return err
-	}
-
+// runServe wires instrumentation and the server from the already-loaded config.
+func runServe(cfg config.Config) error {
 	ctx := context.Background()
 	shutdown, err := instrumentation.Setup(ctx, cfg.Instrumentation)
 	if err != nil {
@@ -47,6 +50,12 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		}
 	}()
 
+	if cfg.DB.AutoMigrate {
+		if err := migrateUp(ctx, cfg.DB); err != nil {
+			return err
+		}
+	}
+
 	slog.Info(
 		"starting server",
 		"port",
@@ -57,4 +66,18 @@ func runServe(cmd *cobra.Command, _ []string) error {
 
 	ws := server.NewWerservice(cfg.Server)
 	return ws.Run()
+}
+
+// migrateUp applies pending migrations at boot with a short-lived Migrator. Its
+// database/sql connection is closed before the server starts — the runtime
+// serves off the pgx pool, not this connection.
+func migrateUp(ctx context.Context, cfg store.Config) error {
+	m, err := store.NewMigrator(cfg)
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	slog.InfoContext(ctx, "applying database migrations")
+	return m.Up(ctx)
 }

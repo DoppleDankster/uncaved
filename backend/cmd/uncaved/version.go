@@ -8,14 +8,12 @@ import (
 	"github.com/DoppleDankster/uncaved/internal/version"
 )
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print build version information",
-	Run: func(cmd *cobra.Command, _ []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), version.Info())
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(versionCmd)
+func versionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print build version information",
+		Run: func(cmd *cobra.Command, _ []string) {
+			fmt.Fprintln(cmd.OutOrStdout(), version.Info())
+		},
+	}
 }
