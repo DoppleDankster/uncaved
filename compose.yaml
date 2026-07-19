@@ -1,0 +1,36 @@
+name: uncaved-dev
+
+# Local dev infrastructure only. The Go backend runs on the host (go run) and
+# connects to these over localhost — keeping rebuilds fast. Mirrors the cloud
+# setup (Neon + Grafana Cloud) with local, auth-free equivalents.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: uncaved
+      POSTGRES_PASSWORD: uncaved
+      POSTGRES_DB: uncaved
+    ports:
+      - "5432:5432" # change the host side if you already run a local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uncaved -d uncaved"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Grafana's all-in-one local observability stack: OTel Collector + Loki
+  # (logs) + Tempo (traces) + Prometheus (metrics) + Grafana UI, prewired.
+  # Accepts OTLP with no auth, unlike Grafana Cloud.
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    ports:
+      - "3000:3000" # Grafana UI  -> http://localhost:3000
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP   -> app points here
+    # Telemetry is disposable in dev, so no volumes — a restart is a clean slate.
+
+volumes:
+  pgdata:

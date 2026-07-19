@@ -1,0 +1,25 @@
+# Local dev config for the docker-compose stack (compose.yaml at repo root).
+# Safe to commit: localhost only, throwaway container credentials, no real
+# secrets. Run with:  go run ./cmd/uncaved serve --config config.dev.toml
+# (No .env sourcing needed — local OTLP takes no auth.)
+
+[server]
+port = 8080
+
+[instrumentation]
+service-name = "uncaved"
+service-version = "dev"
+environment = "development"
+# Local otel-lgtm OTLP HTTP receiver — no Authorization header needed.
+otlp-endpoint = "http://localhost:4318"
+log-level = "debug"
+trace-sampling = 1.0
+metric-interval = "15s" # snappier than prod so metrics show up fast in Grafana
+
+[db]
+host = "localhost"
+port = 5432
+database = "uncaved"
+username = "uncaved"
+password = "uncaved" # matches compose.yaml; dev-only, not a secret
+auto-migrate = true

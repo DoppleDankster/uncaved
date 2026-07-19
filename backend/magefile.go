@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
 )
 
@@ -64,17 +65,49 @@ func Clean() error {
 // against the repository root regardless of mage's working directory.
 func Changelog() error {
 	if _, err := exec.LookPath("git-cliff"); err != nil {
-		return fmt.Errorf("git-cliff not found on PATH; install it: https://git-cliff.org/docs/installation")
+		return fmt.Errorf(
+			"git-cliff not found on PATH; install it: https://git-cliff.org/docs/installation",
+		)
 	}
 	root, err := sh.Output("git", "rev-parse", "--show-toplevel")
 	if err != nil {
 		return fmt.Errorf("locate repo root: %w", err)
 	}
-	return sh.RunV("git-cliff",
+	return sh.RunV(
+		"git-cliff",
 		"--repository", root,
 		"--config", filepath.Join(root, "cliff.toml"),
 		"--output", filepath.Join(root, "CHANGELOG.md"),
 	)
+}
+
+// Dev groups targets for the local dev stack (Postgres + Grafana otel-lgtm)
+// defined in compose.yaml at the repo root.
+type Dev mg.Namespace
+
+// Up starts the local dev stack in the background, blocking until every
+// container reports healthy. Point the app at it with:
+//
+//	go run ./cmd/uncaved serve --config config.dev.toml
+func (Dev) Up() error {
+	return compose("up", "-d", "--wait")
+}
+
+// Down stops and removes the dev stack's containers and network. The Postgres
+// data volume is preserved — run `docker compose down --volumes` for a reset.
+func (Dev) Down() error {
+	return compose("down")
+}
+
+// compose runs docker compose against the repo-root compose.yaml, so the
+// targets work regardless of mage's working directory (it runs from backend/).
+func compose(args ...string) error {
+	root, err := sh.Output("git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return fmt.Errorf("locate repo root: %w", err)
+	}
+	full := append([]string{"compose", "-f", filepath.Join(root, "compose.yaml")}, args...)
+	return sh.RunV("docker", full...)
 }
 
 // flag renders a single -X linker assignment: -X pkg.Name=value.
