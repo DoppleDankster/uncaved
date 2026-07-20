@@ -9,7 +9,9 @@ CREATE TABLE users (
     id         UUID PRIMARY KEY,
     name       TEXT NOT NULL CHECK (name <> ''),
     label      TEXT NOT NULL DEFAULT '',
-    avatar_key TEXT CHECK (avatar_key <> ''),   -- NULL allowed (*string), never ''
+    -- No avatar column: avatars live at the deterministic object key
+    -- avatar/{user_id} in R2, with the client falling back to avatar/default
+    -- on 404. Reads need no DB field or presigned URL.
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

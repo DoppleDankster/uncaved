@@ -14,7 +14,6 @@ type User struct {
 	ID        uuid.UUID `db:"id"`
 	Name      string    `db:"name"`
 	Label     string    `db:"label"`
-	AvatarKey *string   `db:"avatar_key"`
 	CreatedAt time.Time
 }
 
@@ -29,7 +28,7 @@ func NewUserRepo(db DBTX) *UserRepo {
 func (u *UserRepo) ByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var user User
 
-	query, args, err := psql.Select("id, name, label, avatar_key, created_at").
+	query, args, err := psql.Select("id, name, label, created_at").
 		From("users").
 		Where(squirrel.Eq{"id": id}).
 		ToSql()
@@ -50,7 +49,7 @@ func (u *UserRepo) ByID(ctx context.Context, id uuid.UUID) (User, error) {
 func (u *UserRepo) List(ctx context.Context) ([]User, error) {
 	var users []User
 
-	query, args, err := psql.Select("id, name, label, avatar_key, created_at").
+	query, args, err := psql.Select("id, name, label, created_at").
 		From("users").
 		ToSql()
 	if err != nil {
@@ -65,12 +64,9 @@ func (u *UserRepo) List(ctx context.Context) ([]User, error) {
 }
 
 func (u *UserRepo) Create(ctx context.Context, user User) (User, error) {
-	if user.AvatarKey != nil && *user.AvatarKey == "" {
-		user.AvatarKey = nil
-	}
 	query, args, err := psql.Insert("users").
-		Columns("id", "name", "label", "avatar_key").
-		Values(user.ID, user.Name, user.Label, user.AvatarKey).
+		Columns("id", "name", "label").
+		Values(user.ID, user.Name, user.Label).
 		Suffix("RETURNING created_at").
 		ToSql()
 	if err != nil {

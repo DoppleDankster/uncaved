@@ -18,9 +18,9 @@ type User struct {
 	Name  string    `json:"name"`
 	Label string    `json:"label"` // Chief Autism Office
 
-	// AvatarKey is an object storage key for an uploaded avatar, nil when the
-	// client should fall back to rendering initials.
-	AvatarKey *string `json:"avatar_key"`
+	// Avatars are not stored on the user: they live at the deterministic object
+	// key avatar/{id} in R2, with the client falling back to avatar/default on
+	// 404. Nothing to carry in the model.
 
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -34,9 +34,6 @@ func (u User) Validate() error {
 	}
 	if utf8.RuneCountInString(u.Label) > maxUserLabelLen {
 		return fmt.Errorf("user: label %v too long", u.Label)
-	}
-	if u.AvatarKey != nil && *u.AvatarKey == "" {
-		return fmt.Errorf("user: avatar_key must not be empty when set")
 	}
 	return nil
 }

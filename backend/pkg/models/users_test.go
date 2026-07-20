@@ -9,13 +9,11 @@ import (
 )
 
 func validUser() User {
-	avatarKey := "/images/avatar/DoppleDankster"
 	return User{
 		ID:        uuid.New(),
 		Name:      "DoppleDankster",
 		Label:     "Chief Autism Officer",
 		CreatedAt: time.Now(),
-		AvatarKey: &avatarKey,
 	}
 }
 
@@ -44,17 +42,6 @@ func TestUserValidate(t *testing.T) {
 			func(u *User) { u.Label = "" },
 			false,
 		},
-		{
-			"no avatar",
-			func(u *User) { u.AvatarKey = nil },
-			false,
-		},
-		{
-			"empty avatar key",
-			func(u *User) { k := ""; u.AvatarKey = &k },
-			true,
-		},
-
 		{
 			"username at the cap",
 			func(u *User) { u.Name = strings.Repeat("a", maxNameLen) },
