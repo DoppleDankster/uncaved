@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 type Store struct {
 	pool *pgxpool.Pool
