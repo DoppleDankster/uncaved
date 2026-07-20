@@ -12,6 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+
+	"github.com/DoppleDankster/uncaved/internal/store"
 )
 
 // serviceName labels the server span otelgin opens for each request.
@@ -25,7 +27,7 @@ type Webservice struct {
 	port int
 }
 
-func NewWerservice(cfg Config) Webservice {
+func NewWerservice(cfg Config, st *store.Store) Webservice {
 	a := gin.New()
 
 	// otelgin is registered first so its span wraps recovery and records the final status.
@@ -33,6 +35,8 @@ func NewWerservice(cfg Config) Webservice {
 		otelgin.Middleware(serviceName),
 		gin.Recovery(),
 	)
+
+	registerRoutes(a, st)
 
 	return Webservice{
 		api:  a,

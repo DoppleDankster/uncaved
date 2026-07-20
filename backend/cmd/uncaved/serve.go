@@ -56,6 +56,12 @@ func runServe(cfg config.Config) error {
 		}
 	}
 
+	st, err := store.Open(ctx, cfg.DB)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
 	slog.Info(
 		"starting server",
 		"port",
@@ -64,7 +70,7 @@ func runServe(cfg config.Config) error {
 		cfg.Instrumentation.Environment,
 	)
 
-	ws := server.NewWerservice(cfg.Server)
+	ws := server.NewWerservice(cfg.Server, st)
 	return ws.Run()
 }
 
