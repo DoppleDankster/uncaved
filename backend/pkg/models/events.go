@@ -7,89 +7,53 @@ import (
 	"github.com/google/uuid"
 )
 
-// EventStatus tracks the event lifecycle:
-// draft -> polling -> scheduled -> past.
-type EventStatus string
+// CreateEventRequest is the client payload for POST /events. It carries only
+// what the client owns: the server assigns id, status (draft), and timestamps.
+type CreateEventRequest struct {
+	GroupID       uuid.UUID  `json:"group_id"`
+	Name          string     `json:"name"`
+	Type          string     `json:"type"`
+	StartsAt      *time.Time `json:"starts_at"`
+	Lat           float64    `json:"lat"`
+	Lon           float64    `json:"lon"`
+	LocationLabel string     `json:"location_label"`
+}
 
-const (
-	EventStatusDraft     EventStatus = "draft"
-	EventStatusPolling   EventStatus = "polling"
-	EventStatusScheduled EventStatus = "scheduled"
-	EventStatusPast      EventStatus = "past"
-)
-
-func (s EventStatus) Valid() bool {
-	switch s {
-	case EventStatusDraft, EventStatusPolling, EventStatusScheduled, EventStatusPast:
-		return true
+// Validate checks the request shape before it reaches the store. Domain-state
+// invariants (the lifecycle, who may post) belong to the service layer, not
+// here; this only guards the fields the client sends.
+func (r CreateEventRequest) Validate() error {
+	if r.GroupID == uuid.Nil {
+		return fmt.Errorf("event: group_id is required")
 	}
-	return false
-}
-
-// Event is a single meetup: a place, a status, and eventually a date.
-type Event struct {
-	ID uuid.UUID `json:"id"`
-
-	Name string `json:"name"`
-
-	// Type is free-form string ex "restaurant", "bar", "hike".
-	Type string `json:"type"`
-
-	// StartsAt is nil until a date is set directly or confirmed from a poll.
-	StartsAt *time.Time `json:"starts_at"`
-
-	Lat           float64 `json:"lat"`
-	Lon           float64 `json:"lon"`
-	LocationLabel string  `json:"location_label"`
-
-	CreatedBy uuid.UUID   `json:"created_by"`
-	Status    EventStatus `json:"status"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// Validate reports whether the event is internally consistent, independent of
-// any transition it is making.
-func (e *Event) Validate() error {
-	if e.Name == "" {
+	if r.Name == "" {
 		return fmt.Errorf("event: name is required")
 	}
-	if e.Type == "" {
+	if r.Type == "" {
 		return fmt.Errorf("event: type is required")
 	}
-	if !e.Status.Valid() {
-		return fmt.Errorf("event: invalid status %q", e.Status)
+	if r.Lat < -90 || r.Lat > 90 {
+		return fmt.Errorf("event: lat %v out of range", r.Lat)
 	}
-	if e.Lat < -90 || e.Lat > 90 {
-		return fmt.Errorf("event: lat %v out of range", e.Lat)
-	}
-	if e.Lon < -180 || e.Lon > 180 {
-		return fmt.Errorf("event: lon %v out of range", e.Lon)
-	}
-	if e.CreatedBy == uuid.Nil {
-		return fmt.Errorf("event: created_by is required")
-	}
-	// A scheduled or past event has a date by definition; a polling one must not,
-	// since confirming a poll option is what sets StartsAt.
-	switch e.Status {
-	case EventStatusScheduled, EventStatusPast:
-		if e.StartsAt == nil {
-			return fmt.Errorf("event: status %q requires starts_at", e.Status)
-		}
-	case EventStatusPolling:
-		if e.StartsAt != nil {
-			return fmt.Errorf("event: status %q must not have starts_at", e.Status)
-		}
+	if r.Lon < -180 || r.Lon > 180 {
+		return fmt.Errorf("event: lon %v out of range", r.Lon)
 	}
 	return nil
 }
 
-// IsPast reports whether the event has happened, covering the case where the
-// date has passed but the status has not been swept to past yet.
-func (e *Event) IsPast(now time.Time) bool {
-	if e.Status == EventStatusPast {
-		return true
-	}
-	return e.StartsAt != nil && e.StartsAt.Before(now)
+// EventResponse is the API shape of an event: snake_case JSON, decoupled from
+// the store row so persistence changes don't leak to clients.
+type EventResponse struct {
+	ID            uuid.UUID  `json:"id"`
+	GroupID       uuid.UUID  `json:"group_id"`
+	Name          string     `json:"name"`
+	Type          string     `json:"type"`
+	StartsAt      *time.Time `json:"starts_at"`
+	Lat           float64    `json:"lat"`
+	Lon           float64    `json:"lon"`
+	LocationLabel string     `json:"location_label"`
+	CreatedBy     uuid.UUID  `json:"created_by"`
+	Status        string     `json:"status"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
