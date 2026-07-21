@@ -15,8 +15,45 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Groups own events. A user must be a member of a group to see or act on its
+-- events; membership is also the "event created" notification list.
+CREATE TABLE groups (
+    id          UUID PRIMARY KEY,
+    name        TEXT NOT NULL CHECK (name <> ''),
+    description TEXT NOT NULL DEFAULT '',
+    created_by  UUID NOT NULL REFERENCES users (id),   -- RESTRICT: keep the creator
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE group_members (
+    group_id  UUID NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+    user_id   UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    role      TEXT NOT NULL CHECK (role IN ('owner', 'member')),
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (group_id, user_id)
+);
+
+CREATE INDEX idx_group_members_user_id ON group_members (user_id);
+
+-- Shareable, reusable join links (WhatsApp/Signal/mail). Any member mints one;
+-- anyone with a valid account who opens it joins. Validity is app-enforced in a
+-- tx: not revoked, not past expires_at, use_count < max_uses when set.
+CREATE TABLE group_invites (
+    token      TEXT PRIMARY KEY,              -- url-safe random, embedded in the link
+    group_id   UUID NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+    created_by UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ,                   -- NULL: never expires
+    max_uses   INTEGER CHECK (max_uses > 0),  -- NULL: unlimited
+    use_count  INTEGER NOT NULL DEFAULT 0,
+    revoked_at TIMESTAMPTZ,                   -- NULL: active
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_group_invites_group_id ON group_invites (group_id);
+
 CREATE TABLE events (
     id             UUID PRIMARY KEY,
+    group_id       UUID NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
     name           TEXT NOT NULL CHECK (name <> ''),
     type           TEXT NOT NULL CHECK (type <> ''),
     starts_at      TIMESTAMPTZ,                    -- NULL until scheduled/confirmed
@@ -39,6 +76,7 @@ CREATE TABLE events (
 
 CREATE INDEX idx_events_status ON events (status);
 CREATE INDEX idx_events_created_by ON events (created_by);
+CREATE INDEX idx_events_group_id ON events (group_id);
 
 CREATE TABLE device_tokens (
     token      TEXT PRIMARY KEY,   -- FCM tokens are globally unique
@@ -128,4 +166,7 @@ DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS subscriptions;
 DROP TABLE IF EXISTS device_tokens;
 DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS group_invites;
+DROP TABLE IF EXISTS group_members;
+DROP TABLE IF EXISTS groups;
 DROP TABLE IF EXISTS users;
