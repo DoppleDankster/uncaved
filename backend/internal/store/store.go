@@ -10,7 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+// Builder is the shared squirrel statement builder, fixed to Postgres $N
+// placeholders. Feature repos alias it (var psql = store.Builder) so their SQL
+// reads the same while the placeholder policy lives in one place.
+var Builder = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 type Store struct {
 	pool *pgxpool.Pool

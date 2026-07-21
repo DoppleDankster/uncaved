@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/DoppleDankster/uncaved/internal/config"
+	"github.com/DoppleDankster/uncaved/internal/event"
 	"github.com/DoppleDankster/uncaved/internal/instrumentation"
 	"github.com/DoppleDankster/uncaved/internal/server"
 	"github.com/DoppleDankster/uncaved/internal/store"
@@ -70,7 +71,7 @@ func runServe(cfg config.Config) error {
 		cfg.Instrumentation.Environment,
 	)
 
-	ws := server.NewWerservice(cfg.Server, st)
+	ws := server.NewWebservice(cfg.Server, event.NewHandler(st))
 	return ws.Run()
 }
 

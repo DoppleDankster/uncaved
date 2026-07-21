@@ -1,4 +1,4 @@
-package store
+package user
 
 import (
 	"context"
@@ -6,11 +6,14 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/DoppleDankster/uncaved/internal/store"
+	"github.com/DoppleDankster/uncaved/internal/storetest"
 )
 
 func TestUserRepo(t *testing.T) {
-	st := newTestStore(t)
-	repo := NewUserRepo(st.DB())
+	st := storetest.NewStore(t)
+	repo := NewRepo(st.DB())
 	ctx := context.Background()
 
 	// Unique ids per subtest keep them isolated on the shared database.
@@ -39,7 +42,7 @@ func TestUserRepo(t *testing.T) {
 
 	t.Run("missing id is ErrNotFound", func(t *testing.T) {
 		_, err := repo.ByID(ctx, uuid.New())
-		if !errors.Is(err, ErrNotFound) {
+		if !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("want ErrNotFound, got %v", err)
 		}
 	})

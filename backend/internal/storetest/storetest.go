@@ -1,4 +1,7 @@
-package store
+// Package storetest provides a throwaway, fully-migrated Postgres for
+// integration tests. It lives in a normal (non _test) package so every feature's
+// test suite can share one harness instead of duplicating the container setup.
+package storetest
 
 import (
 	"context"
@@ -8,28 +11,30 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/DoppleDankster/uncaved/internal/store"
 )
 
-// newTestStore spins up a throwaway Postgres container, runs every migration
-// against it, and returns a connected *Store. Container and pool are torn down
-// via t.Cleanup, so each caller gets an isolated, fully-migrated database.
+// NewStore spins up a throwaway Postgres container, runs every migration against
+// it, and returns a connected *store.Store. Container and pool are torn down via
+// t.Cleanup, so each caller gets an isolated, fully-migrated database.
 //
 // Requires a running Docker daemon; `go test -short` skips these tests so the
 // unit suite stays Docker-free.
-func newTestStore(t *testing.T) *Store {
+func NewStore(t *testing.T) *store.Store {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping: requires Docker (testcontainers)")
 	}
 	ctx := context.Background()
 
-	container, err := postgres.Run(ctx,
+	container, err := tcpostgres.Run(ctx,
 		"postgres:17-alpine",
-		postgres.WithDatabase("uncaved_test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
+		tcpostgres.WithDatabase("uncaved_test"),
+		tcpostgres.WithUsername("test"),
+		tcpostgres.WithPassword("test"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -61,7 +66,7 @@ func newTestStore(t *testing.T) *Store {
 		t.Fatalf("parse port %q: %v", portStr, err)
 	}
 
-	cfg := Config{
+	cfg := store.Config{
 		Host:     host,
 		Port:     port,
 		Username: "test",
@@ -71,7 +76,7 @@ func newTestStore(t *testing.T) *Store {
 
 	// Migrate with the real Migrator (its own database/sql conn), then close it —
 	// the Store serves off its own pgx pool.
-	migrator, err := NewMigrator(cfg)
+	migrator, err := store.NewMigrator(cfg)
 	if err != nil {
 		t.Fatalf("new migrator: %v", err)
 	}
@@ -82,7 +87,7 @@ func newTestStore(t *testing.T) *Store {
 		t.Fatalf("close migrator: %v", err)
 	}
 
-	st, err := Open(ctx, cfg)
+	st, err := store.Open(ctx, cfg)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

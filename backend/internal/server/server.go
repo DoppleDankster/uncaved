@@ -12,8 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-
-	"github.com/DoppleDankster/uncaved/internal/store"
 )
 
 // serviceName labels the server span otelgin opens for each request.
@@ -22,12 +20,18 @@ import (
 // placeholder once the service config is threaded into the server package.
 const serviceName = "uncaved"
 
+// Registrar is implemented by every feature that mounts HTTP routes. The server
+// stays ignorant of individual features; cmd wires the concrete handlers in.
+type Registrar interface {
+	RegisterRoutes(r gin.IRouter)
+}
+
 type Webservice struct {
 	api  *gin.Engine
 	port int
 }
 
-func NewWerservice(cfg Config, st *store.Store) Webservice {
+func NewWebservice(cfg Config, registrars ...Registrar) Webservice {
 	a := gin.New()
 
 	// otelgin is registered first so its span wraps recovery and records the final status.
@@ -36,7 +40,13 @@ func NewWerservice(cfg Config, st *store.Store) Webservice {
 		gin.Recovery(),
 	)
 
-	registerRoutes(a, st)
+	a.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	for _, reg := range registrars {
+		reg.RegisterRoutes(a)
+	}
 
 	return Webservice{
 		api:  a,

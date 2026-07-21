@@ -1,4 +1,4 @@
-package store
+package user
 
 import (
 	"context"
@@ -8,8 +8,15 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/google/uuid"
+
+	"github.com/DoppleDankster/uncaved/internal/store"
 )
 
+// psql aliases the shared builder so this package's SQL reads locally while the
+// placeholder policy stays in internal/store.
+var psql = store.Builder
+
+// User is the persistence mapping for a row in users.
 type User struct {
 	ID        uuid.UUID `db:"id"`
 	Name      string    `db:"name"`
@@ -17,15 +24,15 @@ type User struct {
 	CreatedAt time.Time
 }
 
-type UserRepo struct {
-	db DBTX
+type Repo struct {
+	db store.DBTX
 }
 
-func NewUserRepo(db DBTX) *UserRepo {
-	return &UserRepo{db}
+func NewRepo(db store.DBTX) *Repo {
+	return &Repo{db}
 }
 
-func (u *UserRepo) ByID(ctx context.Context, id uuid.UUID) (User, error) {
+func (u *Repo) ByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var user User
 
 	query, args, err := psql.Select("id, name, label, created_at").
@@ -39,14 +46,14 @@ func (u *UserRepo) ByID(ctx context.Context, id uuid.UUID) (User, error) {
 	err = pgxscan.Get(ctx, u.db, &user, query, args...)
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			return User{}, ErrNotFound
+			return User{}, store.ErrNotFound
 		}
 		return User{}, fmt.Errorf("store: select user by id %v: %w", id, err)
 	}
 	return user, nil
 }
 
-func (u *UserRepo) List(ctx context.Context) ([]User, error) {
+func (u *Repo) List(ctx context.Context) ([]User, error) {
 	var users []User
 
 	query, args, err := psql.Select("id, name, label, created_at").
@@ -63,7 +70,7 @@ func (u *UserRepo) List(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
-func (u *UserRepo) Create(ctx context.Context, user User) (User, error) {
+func (u *Repo) Create(ctx context.Context, user User) (User, error) {
 	query, args, err := psql.Insert("users").
 		Columns("id", "name", "label").
 		Values(user.ID, user.Name, user.Label).
@@ -80,7 +87,7 @@ func (u *UserRepo) Create(ctx context.Context, user User) (User, error) {
 	return user, nil
 }
 
-func (u *UserRepo) DeleteByID(ctx context.Context, id uuid.UUID) error {
+func (u *Repo) DeleteByID(ctx context.Context, id uuid.UUID) error {
 	query, args, err := psql.
 		Delete("users").
 		Where(squirrel.Eq{"id": id}).

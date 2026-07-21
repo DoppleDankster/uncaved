@@ -1,4 +1,4 @@
-package store
+package event
 
 import (
 	"context"
@@ -7,30 +7,45 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/DoppleDankster/uncaved/internal/store"
+	"github.com/DoppleDankster/uncaved/internal/storetest"
 )
 
 func TestEventRepo(t *testing.T) {
-	st := newTestStore(t)
+	st := storetest.NewStore(t)
 	ctx := context.Background()
-	events := NewEventRepo(st.DB())
-	users := NewUserRepo(st.DB())
+	events := NewRepo(st.DB())
 
-	// events.created_by is a FK to users(id) — seed a creator first.
-	creator, err := users.Create(ctx, User{ID: uuid.New(), Name: "Creator"})
-	if err != nil {
+	// events.created_by and events.group_id are FKs — seed a creator and a group
+	// directly. This package owns neither table, so raw SQL keeps the event test
+	// independent of the user/group packages; the store only needs the FKs met.
+	creatorID := uuid.New()
+	if _, err := st.DB().Exec(ctx,
+		`INSERT INTO users (id, name) VALUES ($1, $2)`,
+		creatorID, "Creator",
+	); err != nil {
 		t.Fatalf("seed user: %v", err)
+	}
+	groupID := uuid.New()
+	if _, err := st.DB().Exec(ctx,
+		`INSERT INTO groups (id, name, created_by) VALUES ($1, $2, $3)`,
+		groupID, "Hikers", creatorID,
+	); err != nil {
+		t.Fatalf("seed group: %v", err)
 	}
 
 	newEvent := func(status string, startsAt *time.Time) Event {
 		return Event{
 			ID:            uuid.New(),
+			GroupID:       groupID,
 			Name:          "Hike",
 			Type:          "hike",
 			StartsAt:      startsAt,
 			Lat:           45.76,
 			Lon:           4.83,
 			LocationLabel: "Lyon",
-			CreatedBy:     creator.ID,
+			CreatedBy:     creatorID,
 			Status:        status,
 		}
 	}
@@ -51,7 +66,7 @@ func TestEventRepo(t *testing.T) {
 			t.Fatalf("by id: %v", err)
 		}
 		if got.Name != "Hike" || got.Type != "hike" || got.Status != "draft" ||
-			got.CreatedBy != creator.ID || got.LocationLabel != "Lyon" {
+			got.CreatedBy != creatorID || got.LocationLabel != "Lyon" {
 			t.Errorf("round-trip mismatch: %+v", got)
 		}
 		if got.StartsAt != nil {
@@ -86,7 +101,7 @@ func TestEventRepo(t *testing.T) {
 	})
 
 	t.Run("missing id is ErrNotFound", func(t *testing.T) {
-		if _, err := events.ByID(ctx, uuid.New()); !errors.Is(err, ErrNotFound) {
+		if _, err := events.ByID(ctx, uuid.New()); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("want ErrNotFound, got %v", err)
 		}
 	})
@@ -99,7 +114,7 @@ func TestEventRepo(t *testing.T) {
 		if err := events.DeleteByID(ctx, in.ID); err != nil {
 			t.Fatalf("delete: %v", err)
 		}
-		if _, err := events.ByID(ctx, in.ID); !errors.Is(err, ErrNotFound) {
+		if _, err := events.ByID(ctx, in.ID); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("after delete want ErrNotFound, got %v", err)
 		}
 	})

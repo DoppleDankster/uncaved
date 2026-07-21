@@ -1,4 +1,4 @@
-package store
+package event
 
 import (
 	"context"
@@ -8,14 +8,23 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/google/uuid"
+
+	"github.com/DoppleDankster/uncaved/internal/store"
 )
+
+// psql aliases the shared builder so this package's SQL reads locally while the
+// placeholder policy stays in internal/store.
+var psql = store.Builder
 
 // eventColumns is the full projection, shared by every read so the SELECT list
 // can't drift from the struct.
-const eventColumns = "id, name, type, starts_at, lat, lon, location_label, created_by, status, created_at, updated_at"
+const eventColumns = "id, group_id, name, type, starts_at, lat, lon, location_label, created_by, status, created_at, updated_at"
 
+// Event is the persistence mapping for a row in events. Domain rules do not live
+// here — the store is just the SQL boundary.
 type Event struct {
 	ID            uuid.UUID  `db:"id"`
+	GroupID       uuid.UUID  `db:"group_id"`
 	Name          string     `db:"name"`
 	Type          string     `db:"type"`
 	StartsAt      *time.Time `db:"starts_at"`
@@ -28,15 +37,15 @@ type Event struct {
 	UpdatedAt     time.Time  `db:"updated_at"`
 }
 
-type EventRepo struct {
-	db DBTX
+type Repo struct {
+	db store.DBTX
 }
 
-func NewEventRepo(db DBTX) *EventRepo {
-	return &EventRepo{db}
+func NewRepo(db store.DBTX) *Repo {
+	return &Repo{db}
 }
 
-func (r *EventRepo) ByID(ctx context.Context, id uuid.UUID) (Event, error) {
+func (r *Repo) ByID(ctx context.Context, id uuid.UUID) (Event, error) {
 	var e Event
 
 	query, args, err := psql.Select(eventColumns).
@@ -50,14 +59,14 @@ func (r *EventRepo) ByID(ctx context.Context, id uuid.UUID) (Event, error) {
 	err = pgxscan.Get(ctx, r.db, &e, query, args...)
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			return Event{}, ErrNotFound
+			return Event{}, store.ErrNotFound
 		}
 		return Event{}, fmt.Errorf("store: select event by id %v: %w", id, err)
 	}
 	return e, nil
 }
 
-func (r *EventRepo) List(ctx context.Context) ([]Event, error) {
+func (r *Repo) List(ctx context.Context) ([]Event, error) {
 	var events []Event
 
 	query, args, err := psql.Select(eventColumns).
@@ -74,12 +83,12 @@ func (r *EventRepo) List(ctx context.Context) ([]Event, error) {
 	return events, nil
 }
 
-func (r *EventRepo) Create(ctx context.Context, event Event) (Event, error) {
+func (r *Repo) Create(ctx context.Context, e Event) (Event, error) {
 	query, args, err := psql.Insert("events").
-		Columns("id", "name", "type", "starts_at", "lat", "lon",
+		Columns("id", "group_id", "name", "type", "starts_at", "lat", "lon",
 			"location_label", "created_by", "status").
-		Values(event.ID, event.Name, event.Type, event.StartsAt, event.Lat, event.Lon,
-			event.LocationLabel, event.CreatedBy, event.Status).
+		Values(e.ID, e.GroupID, e.Name, e.Type, e.StartsAt, e.Lat, e.Lon,
+			e.LocationLabel, e.CreatedBy, e.Status).
 		Suffix("RETURNING created_at, updated_at").
 		ToSql()
 	if err != nil {
@@ -87,14 +96,14 @@ func (r *EventRepo) Create(ctx context.Context, event Event) (Event, error) {
 	}
 
 	// created_at and updated_at are DB-owned (DEFAULT now()); read them back.
-	err = r.db.QueryRow(ctx, query, args...).Scan(&event.CreatedAt, &event.UpdatedAt)
+	err = r.db.QueryRow(ctx, query, args...).Scan(&e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return Event{}, fmt.Errorf("store: insert event: %w", err)
 	}
-	return event, nil
+	return e, nil
 }
 
-func (r *EventRepo) DeleteByID(ctx context.Context, id uuid.UUID) error {
+func (r *Repo) DeleteByID(ctx context.Context, id uuid.UUID) error {
 	query, args, err := psql.Delete("events").
 		Where(sq.Eq{"id": id}).
 		ToSql()
